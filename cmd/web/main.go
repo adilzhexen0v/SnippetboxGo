@@ -1,28 +1,39 @@
 package main
 
 import (
+	"com.aitu.snippetbox/internal/models"
+	"context"
 	"flag"
-	"fmt"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"log"
 	"net/http"
 	"os"
-	"runtime/debug"
 )
+
+var infoLog = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+var errorLog = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 type application struct {
 	errorLog *log.Logger
 	infoLog  *log.Logger
+	snippets *models.SnippetModel
 }
 
 func main() {
 	addr := flag.String("addr", ":4000", "HTTP network address")
 	flag.Parse()
-	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	dbURL := "postgres://postgres:123@localhost:5432/snippetbox"
+	db, err1 := openDB(dbURL)
+	if err1 != nil {
+		errorLog.Fatal(err1)
+	}
+	defer db.Close()
 
 	app := &application{
 		errorLog: errorLog,
 		infoLog:  infoLog,
+		snippets: &models.SnippetModel{DB: db},
 	}
 
 	srv := &http.Server{
@@ -36,26 +47,8 @@ func main() {
 	errorLog.Fatal(err)
 }
 
-func (app *application) routes() *http.ServeMux {
-	mux := http.NewServeMux()
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-	mux.HandleFunc("/", app.home)
-	mux.HandleFunc("/snippet/view", app.snippetView)
-	mux.HandleFunc("/snippet/create", app.snippetCreate)
-	return mux
-}
-
-func (app *application) serverError(w http.ResponseWriter, err error) {
-	trace := fmt.Sprintf("%s\n%s", err.Error(), debug.Stack())
-	app.errorLog.Output(2, trace)
-	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-}
-
-func (app *application) clientError(w http.ResponseWriter, status int) {
-	http.Error(w, http.StatusText(status), status)
-}
-
-func (app *application) notFound(w http.ResponseWriter) {
-	app.clientError(w, http.StatusNotFound)
+func openDB(dsn string) (*pgxpool.Pool, error) {
+	pool, err1 := pgxpool.Connect(context.Background(), dsn)
+	infoLog.Printf("Connected!")
+	return pool, err1
 }
