@@ -2,9 +2,9 @@ package models
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"net/http"
 	"time"
@@ -61,7 +61,7 @@ func (sm *SnippetModel) Get(w http.ResponseWriter, snippetId int) (*Snippet, err
 	err = row.Scan(&s.ID, &s.Title, &s.Content, &s.Created, &s.Expires)
 	if err != nil {
 
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoRecord
 		} else {
 			return nil, err
@@ -93,9 +93,12 @@ func (sm *SnippetModel) Latest(w http.ResponseWriter) ([]*Snippet, error) {
 	}
 	if err != nil {
 
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
+			fmt.Println("ErrNoRecord from snippets.go")
 			return nil, ErrNoRecord
 		} else {
+			fmt.Println("Another error from snippets.go")
+
 			return nil, err
 		}
 	}

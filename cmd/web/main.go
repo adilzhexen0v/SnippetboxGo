@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -14,9 +15,10 @@ var infoLog = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 var errorLog = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 type application struct {
-	errorLog *log.Logger
-	infoLog  *log.Logger
-	snippets *models.SnippetModel
+	errorLog      *log.Logger
+	infoLog       *log.Logger
+	snippets      *models.SnippetModel
+	templateCache map[string]*template.Template
 }
 
 func main() {
@@ -30,10 +32,16 @@ func main() {
 	}
 	defer db.Close()
 
+	templateCache, err2 := newTemplateCache()
+	if err2 != nil {
+		errorLog.Fatal(err2)
+	}
+
 	app := &application{
-		errorLog: errorLog,
-		infoLog:  infoLog,
-		snippets: &models.SnippetModel{DB: db},
+		errorLog:      errorLog,
+		infoLog:       infoLog,
+		snippets:      &models.SnippetModel{DB: db},
+		templateCache: templateCache,
 	}
 
 	srv := &http.Server{
