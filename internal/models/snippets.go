@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"net/http"
 	"time"
 )
 
@@ -22,34 +21,40 @@ type SnippetModel struct {
 	DB *pgxpool.Pool
 }
 
-func (sm *SnippetModel) Insert(w http.ResponseWriter, snippet Snippet) (int, error) {
+func (sm *SnippetModel) Insert(title string, content string, expires int) (int, error) {
 	conn, err := sm.DB.Acquire(context.Background())
 	if err != nil {
 		fmt.Printf("Unable to acquire a database connection: %v\n", err)
-		w.WriteHeader(500)
 		return 0, nil
 	}
 	defer conn.Release()
 
+	var stmt string
+	if expires == 7 {
+		stmt = "INSERT INTO snippets (title, content, created, expires) VALUES ($1, $2, current_timestamp, current_timestamp + interval '7 days') RETURNING id"
+	} else if expires == 1 {
+		stmt = "INSERT INTO snippets (title, content, created, expires) VALUES ($1, $2, current_timestamp, current_timestamp + interval '1 day') RETURNING id"
+	} else {
+		stmt = "INSERT INTO snippets (title, content, created, expires) VALUES ($1, $2, current_timestamp, current_timestamp + interval '1 year') RETURNING id"
+	}
+
 	row := conn.QueryRow(context.Background(),
-		"INSERT INTO snippets (title, content, created, expires) VALUES ($1, $2, current_timestamp, current_timestamp + interval '365 days') RETURNING id",
-		snippet.Title, snippet.Content)
+		stmt,
+		title, content)
 	var id int
 	err = row.Scan(&id)
 	if err != nil {
 		fmt.Printf("Unable to INSERT: %v\n", err)
-		w.WriteHeader(500)
 		return 0, nil
 	}
 
 	return id, err
 }
 
-func (sm *SnippetModel) Get(w http.ResponseWriter, snippetId int) (*Snippet, error) {
+func (sm *SnippetModel) Get(snippetId int) (*Snippet, error) {
 	conn, err := sm.DB.Acquire(context.Background())
 	if err != nil {
 		fmt.Printf("Unable to acquire a database connection: %v\n", err)
-		w.WriteHeader(500)
 		return nil, nil
 	}
 	defer conn.Release()
@@ -70,11 +75,10 @@ func (sm *SnippetModel) Get(w http.ResponseWriter, snippetId int) (*Snippet, err
 	return s, err
 }
 
-func (sm *SnippetModel) Latest(w http.ResponseWriter) ([]*Snippet, error) {
+func (sm *SnippetModel) Latest() ([]*Snippet, error) {
 	conn, err := sm.DB.Acquire(context.Background())
 	if err != nil {
 		fmt.Printf("Unable to acquire a database connection: %v\n", err)
-		w.WriteHeader(500)
 		return nil, nil
 	}
 	defer conn.Release()
